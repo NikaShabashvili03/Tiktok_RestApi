@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Session, User, Video, Like, HashTag, Recomended, View
+from .models import Session, User, Video, Like, HashTag, Recomended, View, Sound
 
 
 admin.site.register(User)
@@ -37,3 +37,13 @@ class VideoAdmin(admin.ModelAdmin):
     likes_count.short_description = "Likes"
     views_count.short_description = "Views"
     hashtags_list.short_description = "Hashtags"
+
+
+@admin.register(Sound)
+class SoundAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'url', 'creator', 'usage_count')
+
+    def usage_count(self, obj):
+        return obj.videos.count()
+
+    usage_count.short_description = "Usages"

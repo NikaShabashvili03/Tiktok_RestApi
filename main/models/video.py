@@ -1,5 +1,6 @@
 from django.db import models
 from . import User
+from .sound import Sound
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
@@ -15,7 +16,11 @@ class Category(models.TextChoices):
 class Video(models.Model):
     description = models.CharField(max_length=255)
     creator = models.ForeignKey(User, blank=False, null=False, on_delete=models.CASCADE)
-
+    sound = models.ForeignKey(Sound, related_name='videos', blank=True, null=True, on_delete=models.CASCADE)
+    url = models.CharField(max_length=255)
+    
+    private = models.BooleanField(default=False)
+    
     category = models.CharField(
         max_length=20,
         choices=Category.choices,
@@ -120,3 +125,4 @@ class Recomended(models.Model):
     
     def __str__(self):
         return f"{self.user.firstname} | {self.hashtag.tag} | {self.category}"
+
