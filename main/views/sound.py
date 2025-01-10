@@ -5,6 +5,8 @@ from ..serializers.sound import CreateSoundSerializer, SoundSerializer
 from rest_framework.response import Response
 from django.db.models import Count
 from rest_framework.exceptions import NotFound
+from ..utils import validate_file
+from rest_framework.exceptions import NotFound, ValidationError
 
 class CreateSoundView(generics.GenericAPIView):
     serializer_class = CreateSoundSerializer
@@ -15,11 +17,16 @@ class CreateSoundView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
 
-        url = serializer.validated_data.get("url")
+        sound = request.FILES.get('sound')
         name = serializer.validated_data.get("name")
         user = request.user
 
-        sound = Sound.objects.create(creator=user, name=name, url=url)
+        try:
+            validate_file(sound)
+        except ValidationError as e:
+            raise ValidationError(f"Video file is invalid: {str(e)}")
+        
+        sound = Sound.objects.create(creator=user, name=name, url=sound)
 
         serialized_sound = SoundSerializer(sound).data
 

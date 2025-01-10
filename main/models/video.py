@@ -3,6 +3,10 @@ from . import User
 from .sound import Sound
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from ..utils import file_upload, validate_file
+
+def upload_video(instance, filename):
+    return file_upload(instance, filename, 'videos/')
 
 class Category(models.TextChoices):
     MUSIC = 'MUSIC', 'Music'
@@ -17,7 +21,7 @@ class Video(models.Model):
     description = models.CharField(max_length=255)
     creator = models.ForeignKey(User, blank=False, null=False, on_delete=models.CASCADE)
     sound = models.ForeignKey(Sound, related_name='videos', blank=True, null=True, on_delete=models.CASCADE)
-    url = models.CharField(max_length=255)
+    url = models.FileField(upload_to=upload_video, null=True, blank=True)
     
     private = models.BooleanField(default=False)
     
@@ -31,6 +35,11 @@ class Video(models.Model):
 
     def __str__(self):
         return f"{self.description}"
+    
+    def clean(self):
+        if self.url:
+            validate_file(self.url, 'mp4')
+
 
 
 class HashTag(models.Model):

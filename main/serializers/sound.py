@@ -14,5 +14,5 @@ class SoundSerializer(serializers.ModelSerializer):
         return Video.objects.filter(sound=obj).count()
 
 class CreateSoundSerializer(serializers.Serializer):
-    url = serializers.CharField(write_only=True)
+    sound = serializers.FileField(write_only=True)
     name = serializers.CharField(required=False, allow_blank=True)

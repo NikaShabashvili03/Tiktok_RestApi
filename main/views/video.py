@@ -5,20 +5,28 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from ..models import Video, HashTag, Like, Recomended, View, Sound
 from ..serializers.video import CreateVideoSerializer, VideoSerializer
 from django.utils import timezone
+from ..utils import validate_file, get_video_duration
 from datetime import timedelta
 from django.db.models import Max
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.parsers import MultiPartParser, FormParser
+from moviepy.editor import VideoFileClip, AudioFileClip
+import io
+import os
+import tempfile
+from django.core.files import File
 
 class CreateVideoView(generics.GenericAPIView):
     serializer_class = CreateVideoSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         soundId = serializer.validated_data.get('soundId', None)
-        url = serializer.validated_data.get('url')
+        video = request.FILES.get('video')
         description = serializer.validated_data.get("description")
         hashtags = serializer.validated_data.get("hashtags")
         category = serializer.validated_data.get("category") 
@@ -26,23 +34,86 @@ class CreateVideoView(generics.GenericAPIView):
 
         user = request.user
 
-        if soundId:
-            sound = Sound.objects.filter(id=soundId).first()
+        try:
+            validate_file(video)
+        except ValidationError as e:
+            raise ValidationError(f"Video file is invalid: {str(e)}")
+        
+        try:
+            if soundId:
+                sound = Sound.objects.filter(id=soundId).first()
+        
+                if not sound:
+                    raise NotFound(detail="Sound not found.") 
+                sound_url = f"uploads/{sound.url}"
+                sound_file_path = os.path.join(sound_url)
 
-            if not sound:
-                raise NotFound(detail="Sound not found.") 
-            
-            video = Video.objects.create(url=url, creator=user, description=description, category=category, private=private, sound=sound)
-        else:
-            video = Video.objects.create(url=url, creator=user, description=description, category=category, private=private)
+                if not os.path.exists(sound_file_path):
+                    raise ValidationError("Sound file not found in the specified directory.")
+                    
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+                    temp_file_path = temp_file.name 
+                    for chunk in video.chunks():
+                        temp_file.write(chunk)
 
-        hashtag_objects = [
-            HashTag(video=video, tag=f"#{hash_data.get("tag")}") for hash_data in hashtags
-        ]
-        HashTag.objects.bulk_create(hashtag_objects)
+                with VideoFileClip(temp_file_path) as clip:
+                    duration = get_video_duration(video)
+                    clip = clip.subclip(0, int(duration))
+                    audioclip = AudioFileClip(sound_file_path).subclip(0, int(duration)) 
 
-        return Response(VideoSerializer(video).data)
-    
+                    final_video = clip.set_audio(audioclip)
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_output_file:
+                        output_temp_path = temp_output_file.name  
+                        final_video.write_videofile(output_temp_path, codec="libx264", audio_codec="aac", threads=4)
+
+                    with open(output_temp_path, 'rb') as f:
+                        video_data = f.read()
+
+                video_file_obj = File(io.BytesIO(video_data), name='processed_video.mp4')
+
+                video = Video.objects.create(
+                    url=video_file_obj,
+                    creator=user,
+                    description=description,
+                    category=category,
+                    private=private,
+                    sound=sound,
+                )
+            else:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+                    temp_file_path = temp_file.name 
+                    for chunk in video.chunks():
+                        temp_file.write(chunk)
+
+                with VideoFileClip(temp_file_path) as clip:
+                    video_without_audio = clip.without_audio()
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_output_file:
+                        output_temp_path = temp_output_file.name  
+                        video_without_audio.write_videofile(output_temp_path, codec="libx264", audio_codec="aac", threads=4)
+
+                    with open(output_temp_path, 'rb') as f:
+                        video_data = f.read()
+
+                video_file_obj = File(io.BytesIO(video_data), name='processed_video.mp4')
+
+                video = Video.objects.create(
+                    url=video_file_obj,
+                    creator=user,
+                    description=description,
+                    category=category,
+                    private=private,
+                )
+
+            hashtag_objects = [
+                HashTag(video=video, tag=f"#{hash_data.get("tag")}") for hash_data in hashtags
+            ]
+            HashTag.objects.bulk_create(hashtag_objects)
+            return Response(VideoSerializer(video).data)
+        except Exception as e:
+            raise ValidationError(f"Error processing video: {str(e)}")
+
 
 class LikeVideoView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]

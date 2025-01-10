@@ -27,7 +27,7 @@ class VideoSerializer(serializers.ModelSerializer):
         return View.objects.filter(video=obj).count()
     
 class CreateVideoSerializer(serializers.Serializer):
-    url = serializers.CharField(write_only=True)
+    video = serializers.FileField(write_only=True)
     hashtags = HashTagSerializer(many=True)
     description = serializers.CharField(write_only=True)
     soundId = serializers.CharField(required=False, allow_blank=True)

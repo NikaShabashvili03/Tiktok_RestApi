@@ -22,7 +22,7 @@ class ViewInline(admin.TabularInline):
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'description', 'category', 'created_at', 'creator', 'likes_count', 'views_count', 'hashtags_list')
+    list_display = ('id', 'description', 'category', 'created_at', 'creator', 'likes_count', 'views_count', 'hashtags_list', 'sound')
     inlines = [HashTagInline, LikeInline, ViewInline]
 
     def views_count(self, obj):
@@ -34,9 +34,13 @@ class VideoAdmin(admin.ModelAdmin):
     def hashtags_list(self, obj):
         return ", ".join([hashtag.tag for hashtag in obj.hashtags.all()])
 
+    def sound(self, obj):
+        return obj.sound.name
+    
     likes_count.short_description = "Likes"
     views_count.short_description = "Views"
     hashtags_list.short_description = "Hashtags"
+    sound.short_description = "Sound" 
 
 
 @admin.register(Sound)
@@ -46,4 +50,4 @@ class SoundAdmin(admin.ModelAdmin):
     def usage_count(self, obj):
         return obj.videos.count()
 
-    usage_count.short_description = "Usages"
+    usage_count.short_description = "Usage"
